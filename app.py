@@ -8,7 +8,7 @@ CORS(app)
 
 
 # Load trained model
-model = pickle.load(open("kidney_model.pkl", "rb"))
+model = pickle.load(open("kidney_model_v2.pkl", "rb"))
 
 
 @app.route("/")
