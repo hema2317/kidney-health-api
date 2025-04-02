@@ -27,6 +27,9 @@ def predict():
         int(data["age"]),
         1 if data["sex"].lower() == "male" else 0
     ]
-    prediction = model.predict([features])[0]
+import pandas as pd
+columns = ["hba1c", "albumin", "urine_creatinine", "egfr", "age", "sex"]
+prediction = model.predict(pd.DataFrame([features], columns=columns))[0]
+
     risk_levels = {0: "Low", 1: "Moderate", 2: "High"}
     return jsonify({"risk": risk_levels.get(prediction, "Unknown")})
