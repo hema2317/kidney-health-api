@@ -1,12 +1,13 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import pickle
-import pandas as pd  # ✅ Required for DataFrame input
+import pandas as pd
+import os
 
 app = Flask(__name__)
 CORS(app)
 
-# Load the retrained model
+# Load the trained model
 model = pickle.load(open("kidney_model_v2.pkl", "rb"))
 
 @app.route("/")
@@ -17,7 +18,7 @@ def home():
 def predict():
     data = request.get_json()
 
-    # Extract and prepare features
+    # Prepare input features
     features = [
         float(data["hba1c"]),
         float(data["albumin"]),
@@ -27,16 +28,16 @@ def predict():
         1 if data["sex"].lower() == "male" else 0
     ]
 
-    # 🧠 Fix warning by matching training column names
     columns = ["hba1c", "albumin", "urine_creatinine", "egfr", "age", "sex"]
     input_df = pd.DataFrame([features], columns=columns)
 
-    # Predict risk
     prediction = model.predict(input_df)[0]
 
-    # Map prediction to labels
+    # Map result to label
     risk_levels = {0: "Low", 1: "Moderate", 2: "High"}
     return jsonify({"risk": risk_levels.get(prediction, "Unknown")})
 
+# ✅ Fix for Render – bind to PORT
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
