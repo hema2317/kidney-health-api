@@ -8,7 +8,7 @@ app = Flask(__name__)
 CORS(app)
 
 # Load the trained model
-model = pickle.load(open("kidney_model_v2.pkl", "rb"))
+model = pickle.load(open("kidney_model.pkl", "rb"))
 
 @app.route("/")
 def home():
