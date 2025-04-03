@@ -1,14 +1,14 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import pickle
 import pandas as pd
+import pickle
 import os
 import requests
 
 app = Flask(__name__)
 CORS(app)
 
-# ✅ Load the trained model (string label version)
+# ✅ Load the trained model
 model = pickle.load(open("kidney_model.pkl", "rb"))
 
 @app.route("/")
@@ -20,7 +20,7 @@ def predict():
     try:
         data = request.get_json()
 
-        # Prepare input features
+        # ✅ Prepare input features (match training)
         features = [
             float(data["hba1c"]),
             float(data["albumin"]),
@@ -28,14 +28,12 @@ def predict():
             int(data["age"]),
             1 if data["sex"].lower() == "male" else 0
         ]
-
         columns = ["hba1c", "albumin", "creatinine", "age", "sex"]
         input_df = pd.DataFrame([features], columns=columns)
 
-        # ✅ Predict
+        # ✅ Directly use model's string output
         prediction = model.predict(input_df)[0]
 
-        # ✅ No number mapping needed – model returns strings like "High"
         return jsonify({"risk": str(prediction)})
 
     except Exception as e:
@@ -47,7 +45,6 @@ def cgm_callback():
     if not code:
         return "No authorization code received.", 400
 
-    # Dexcom credentials
     token_url = "https://sandbox-api.dexcom.com/v2/oauth2/token"
     client_id = "EjJmOsxReUCm2GojkJ37SoF3E0WnLu5"
     client_secret = "9LqRvUkZR4bK7Ijh"
@@ -63,8 +60,8 @@ def cgm_callback():
 
     token_response = requests.post(token_url, data=payload)
     token_data = token_response.json()
-
     access_token = token_data.get("access_token")
+
     if not access_token:
         return "Failed to get access token", 400
 
@@ -90,7 +87,7 @@ def cgm_callback():
         "source": "Dexcom CGM"
     })
 
-# ✅ Render support: Bind to port
+# ✅ For Render deployment
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
