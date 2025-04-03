@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import joblib
+import pickle
 import pandas as pd
 import os
 import requests
@@ -8,8 +8,8 @@ import requests
 app = Flask(__name__)
 CORS(app)
 
-# ✅ Load the trained AI model
-model = joblib.load("kidney_model.pkl")
+# ✅ Load the trained model (string label version)
+model = pickle.load(open("kidney_model.pkl", "rb"))
 
 @app.route("/")
 def home():
@@ -17,9 +17,9 @@ def home():
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    data = request.get_json()
-
     try:
+        data = request.get_json()
+
         # Prepare input features
         features = [
             float(data["hba1c"]),
@@ -32,23 +32,22 @@ def predict():
         columns = ["hba1c", "albumin", "creatinine", "age", "sex"]
         input_df = pd.DataFrame([features], columns=columns)
 
-        # ✅ Predict using trained model
+        # ✅ Predict
         prediction = model.predict(input_df)[0]
 
-        # Map result to label
-        risk_levels = {0: "Low", 1: "Moderate", 2: "High"}
-        return jsonify({"risk": risk_levels.get(prediction, "Unknown")})
-    
+        # ✅ No number mapping needed – model returns strings like "High"
+        return jsonify({"risk": str(prediction)})
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# ✅ Dexcom OAuth + HbA1c estimation
 @app.route("/cgm-callback")
 def cgm_callback():
     code = request.args.get("code")
     if not code:
         return "No authorization code received.", 400
 
+    # Dexcom credentials
     token_url = "https://sandbox-api.dexcom.com/v2/oauth2/token"
     client_id = "EjJmOsxReUCm2GojkJ37SoF3E0WnLu5"
     client_secret = "9LqRvUkZR4bK7Ijh"
@@ -71,7 +70,6 @@ def cgm_callback():
 
     glucose_url = "https://sandbox-api.dexcom.com/v2/users/self/egvs?startDate=2024-01-01T00:00:00&endDate=2024-01-02T00:00:00"
     headers = {"Authorization": f"Bearer {access_token}"}
-
     glucose_response = requests.get(glucose_url, headers=headers)
     glucose_data = glucose_response.json()
 
@@ -92,7 +90,7 @@ def cgm_callback():
         "source": "Dexcom CGM"
     })
 
-# ✅ Port binding for Render
+# ✅ Render support: Bind to port
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
