@@ -1,49 +1,52 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import pickle
 import pandas as pd
+import pickle
 import os
+import requests
 
 app = Flask(__name__)
 CORS(app)
 
-# ✅ Load the trained 3-class model (make sure this matches your GitHub model file)
-model = pickle.load(open("kidney_model.pkl", "rb"))
+# ✅ Load the trained model
+with open("kidney_model.pkl", "rb") as f:
+    model = pickle.load(f)
 
 @app.route("/")
 def home():
-    return "✅ Kidney Health API is running with 3-level risk prediction!"
+    return "✅ Kidney Health API is running!"
 
 @app.route("/predict", methods=["POST"])
 def predict():
     data = request.get_json()
 
-    # ✅ Prepare input features (NO 'sex' column now)
+    # ✅ Collect input features (no 'sex')
     features = [
         float(data["hba1c"]),
         float(data["albumin"]),
         float(data["creatinine"]),
+        float(data["egfr"]),
         int(data["age"])
     ]
+    input_df = pd.DataFrame([features], columns=["hba1c", "albumin", "creatinine", "egfr", "age"])
 
-    columns = ["hba1c", "albumin", "creatinine", "age"]
-    input_df = pd.DataFrame([features], columns=columns)
-
-    # ✅ Make prediction
+    # ✅ Get prediction from model (returns 0 / 1 / 2)
     prediction = model.predict(input_df)[0]
 
-    # ✅ Map result to label
-    risk_levels = {0: "Low", 1: "Moderate", 2: "High"}
-    return jsonify({"risk": risk_levels.get(prediction, "Unknown")})
+    # ✅ Map prediction to label
+    risk_map = {0: "Low", 1: "Moderate", 2: "High"}
+    risk_label = risk_map.get(prediction, "Unknown")
 
-# ✅ Optional: Dexcom CGM callback
-import requests
+    return jsonify({"risk": risk_label})
+
+# ✅ Dexcom OAuth callback (optional)
 @app.route("/cgm-callback")
 def cgm_callback():
     code = request.args.get("code")
     if not code:
         return "No authorization code received.", 400
 
+    # Dexcom API credentials
     token_url = "https://sandbox-api.dexcom.com/v2/oauth2/token"
     client_id = "EjJmOsxReUCm2GojkJ37SoF3E0WnLu5"
     client_secret = "9LqRvUkZR4bK7Ijh"
@@ -66,7 +69,6 @@ def cgm_callback():
 
     glucose_url = "https://sandbox-api.dexcom.com/v2/users/self/egvs?startDate=2024-01-01T00:00:00&endDate=2024-01-02T00:00:00"
     headers = {"Authorization": f"Bearer {access_token}"}
-
     glucose_response = requests.get(glucose_url, headers=headers)
     glucose_data = glucose_response.json()
 
@@ -87,7 +89,7 @@ def cgm_callback():
         "source": "Dexcom CGM"
     })
 
-# ✅ Bind to Render port
+# ✅ Fix for Render: bind to PORT
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
