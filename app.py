@@ -1,44 +1,43 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import pandas as pd
 import pickle
+import pandas as pd
 import os
-import requests
 
 app = Flask(__name__)
 CORS(app)
 
-# ✅ Load the trained model
+# ✅ Load the trained 3-class model (make sure this matches your GitHub model file)
 model = pickle.load(open("kidney_model.pkl", "rb"))
 
 @app.route("/")
 def home():
-    return "✅ Kidney Health API is running!"
+    return "✅ Kidney Health API is running with 3-level risk prediction!"
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    try:
-        data = request.get_json()
+    data = request.get_json()
 
-        # ✅ Prepare input features (match training)
-        features = [
-            float(data["hba1c"]),
-            float(data["albumin"]),
-            float(data["creatinine"]),
-            int(data["age"]),
-            1 if data["sex"].lower() == "male" else 0
-        ]
-        columns = ["hba1c", "albumin", "creatinine", "age", "sex"]
-        input_df = pd.DataFrame([features], columns=columns)
+    # ✅ Prepare input features (NO 'sex' column now)
+    features = [
+        float(data["hba1c"]),
+        float(data["albumin"]),
+        float(data["creatinine"]),
+        int(data["age"])
+    ]
 
-        # ✅ Directly use model's string output
-        prediction = model.predict(input_df)[0]
+    columns = ["hba1c", "albumin", "creatinine", "age"]
+    input_df = pd.DataFrame([features], columns=columns)
 
-        return jsonify({"risk": str(prediction)})
+    # ✅ Make prediction
+    prediction = model.predict(input_df)[0]
 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    # ✅ Map result to label
+    risk_levels = {0: "Low", 1: "Moderate", 2: "High"}
+    return jsonify({"risk": risk_levels.get(prediction, "Unknown")})
 
+# ✅ Optional: Dexcom CGM callback
+import requests
 @app.route("/cgm-callback")
 def cgm_callback():
     code = request.args.get("code")
@@ -60,13 +59,14 @@ def cgm_callback():
 
     token_response = requests.post(token_url, data=payload)
     token_data = token_response.json()
-    access_token = token_data.get("access_token")
 
+    access_token = token_data.get("access_token")
     if not access_token:
         return "Failed to get access token", 400
 
     glucose_url = "https://sandbox-api.dexcom.com/v2/users/self/egvs?startDate=2024-01-01T00:00:00&endDate=2024-01-02T00:00:00"
     headers = {"Authorization": f"Bearer {access_token}"}
+
     glucose_response = requests.get(glucose_url, headers=headers)
     glucose_data = glucose_response.json()
 
@@ -87,7 +87,7 @@ def cgm_callback():
         "source": "Dexcom CGM"
     })
 
-# ✅ For Render deployment
+# ✅ Bind to Render port
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
