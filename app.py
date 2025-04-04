@@ -1,39 +1,41 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import pickle
+import numpy as np
 import pandas as pd
-import os
+import joblib
 
 app = Flask(__name__)
 CORS(app)
 
-# ✅ Load trained model
-model = pickle.load(open("kidney_model.pkl", "rb"))
-
-@app.route("/")
-def home():
-    return "✅ Kidney Health API is running!"
+# ✅ Load your trained model and label encoder
+model = joblib.load("kidney_model.pkl")
+label_encoder = joblib.load("label_encoder.pkl")
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    data = request.get_json()
+    try:
+        data = request.get_json()
 
-    # ✅ Build input matching model's expected features (no sex)
-    features = [
-        float(data["hba1c"]),
-        float(data["albumin"]),
-        float(data["creatinine"]),
-        int(data["age"])
-    ]
-    input_df = pd.DataFrame([features], columns=["hba1c", "albumin", "creatinine", "age"])
+        # ✅ Extract input features
+        age = float(data["age"])
+        creatinine = float(data["creatinine"])
+        albumin = float(data["albumin"])
+        egfr = float(data["egfr"])
 
-    # ✅ Predict
-    prediction = model.predict(input_df)[0]
+        # ✅ Create input DataFrame in correct order
+        input_df = pd.DataFrame([[age, creatinine, albumin, egfr]],
+                                columns=["age", "creatinine", "albumin", "egfr"])
 
-    # ✅ Return readable labels
-    return jsonify({"risk": str(prediction)})
+        # ✅ Make prediction
+        prediction = model.predict(input_df)[0]
 
-# ✅ For Render deployment
+        # ✅ Decode label (e.g., 0 → Low)
+        readable_label = label_encoder.inverse_transform([prediction])[0]
+
+        return jsonify({"risk": readable_label})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(debug=True)
