@@ -1,41 +1,51 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS
-import numpy as np
 import pandas as pd
 import joblib
 
+# Initialize Flask app
 app = Flask(__name__)
-CORS(app)
 
-# ✅ Load your trained model and label encoder
-model = joblib.load("kidney_model.pkl")
-label_encoder = joblib.load("label_encoder.pkl")
+# Load the trained model and label encoder
+model = joblib.load("kidney_model_final.pkl")
+label_encoder = joblib.load("label_encoder_final.pkl")
 
-@app.route("/predict", methods=["POST"])
+# Define the route for prediction
+@app.route('/predict', methods=['POST'])
 def predict():
     try:
-        data = request.get_json()
+        # Parse incoming JSON
+        data = request.json
 
-        # ✅ Extract input features
-        age = float(data["age"])
-        creatinine = float(data["creatinine"])
-        albumin = float(data["albumin"])
-        egfr = float(data["egfr"])
+        # Expected keys: age, creatinine, albumin, egfr, hba1c
+        required_keys = ["age", "creatinine", "albumin", "egfr", "hba1c"]
+        for key in required_keys:
+            if key not in data:
+                return jsonify({"error": f"Missing field: {key}"}), 400
 
-        # ✅ Create input DataFrame in correct order
-        input_df = pd.DataFrame([[age, creatinine, albumin, egfr]],
-                                columns=["age", "creatinine", "albumin", "egfr"])
+        # Create DataFrame for prediction
+        features = pd.DataFrame([{
+            "age": data["age"],
+            "creatinine": data["creatinine"],
+            "albumin": data["albumin"],
+            "egfr": data["egfr"],
+            "hba1c": data["hba1c"]
+        }])
 
-        # ✅ Make prediction
-        prediction = model.predict(input_df)[0]
+        # Make prediction
+        prediction = model.predict(features)
+        risk_label = label_encoder.inverse_transform(prediction)[0]
 
-        # ✅ Decode label (e.g., 0 → Low)
-        readable_label = label_encoder.inverse_transform([prediction])[0]
-
-        return jsonify({"risk": readable_label})
+        # Return result
+        return jsonify({"predicted_risk": risk_label})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-if __name__ == "__main__":
+# Home route (optional)
+@app.route('/')
+def home():
+    return "🧠 Kidney Health Predictor API is running!"
+
+# Run the app
+if __name__ == '__main__':
     app.run(debug=True)
