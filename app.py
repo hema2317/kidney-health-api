@@ -1,49 +1,41 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import joblib
-import pandas as pd
+import numpy as np
 
 app = Flask(__name__)
 
-# Load trained model and label encoder
+# ✅ Allow CORS for any frontend origin
+CORS(app, resources={r"/*": {"origins": "*"}})
+
+# ✅ Load model + encoder
 model = joblib.load("kidney_model_final.pkl")
 label_encoder = joblib.load("label_encoder_final.pkl")
 
-# Health check route
-@app.route("/", methods=["GET"])
+@app.route("/")
 def home():
-    return "✅ Kidney Health Predictor is live!"
+    return "✅ Kidney Health API is running!"
 
-# Prediction endpoint
 @app.route("/predict", methods=["POST"])
 def predict():
-    try:
-        data = request.get_json()
+    data = request.get_json()
 
-        # Expected keys
-        required_keys = ["age", "creatinine", "albumin", "egfr", "hba1c"]
+    # Ensure keys are present
+    required_keys = ["age", "creatinine", "albumin", "egfr", "hba1c"]
+    if not all(k in data for k in required_keys):
+        return jsonify({"error": "Missing input"}), 400
 
-        # Check for missing keys
-        if not all(key in data for key in required_keys):
-            return jsonify({"error": f"Missing one or more required fields: {required_keys}"}), 400
+    features = np.array([[ 
+        data["age"],
+        data["creatinine"],
+        data["albumin"],
+        data["egfr"],
+        data["hba1c"]
+    ]])
 
-        # Convert input to DataFrame
-        input_df = pd.DataFrame([{
-            "age": data["age"],
-            "creatinine": data["creatinine"],
-            "albumin": data["albumin"],
-            "egfr": data["egfr"],
-            "hba1c": data["hba1c"]
-        }])
+    prediction = model.predict(features)
+    result = label_encoder.inverse_transform(prediction)[0]
+    return jsonify({"risk": result})
 
-        # Predict
-        prediction = model.predict(input_df)
-        result = label_encoder.inverse_transform(prediction)[0]
-
-        return jsonify({"prediction": result})
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# Run the app on Render (bind to 0.0.0.0 and port 10000)
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    app.run(debug=True)
