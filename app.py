@@ -17,9 +17,10 @@ def home():
 @app.route("/predict", methods=["POST"])
 def predict():
     data = request.get_json()
+    print("data...",data)
 
     # ✅ Only use the 4 features that the model expects
-    required_keys = ["age", "creatinine", "albumin", "egfr"]
+    required_keys = ["age", "creatinine", "albumin", "egfr","hba1c"]
     if not all(k in data for k in required_keys):
         return jsonify({"error": "Missing one or more required fields."}), 400
 
@@ -27,7 +28,8 @@ def predict():
         data["age"],
         data["creatinine"],
         data["albumin"],
-        data["egfr"]
+        data["egfr"],
+        data["hba1c"]
     ]])
 
     prediction = model.predict(features)
