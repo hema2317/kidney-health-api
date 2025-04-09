@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify
 import joblib
 import numpy as np
 
@@ -7,7 +7,7 @@ model = joblib.load("kidney_model.pkl")
 
 @app.route("/")
 def home():
-    return render_template("index.html")
+    return "✅ Kidney Health Predictor API is running!"
 
 @app.route("/predict", methods=["POST"])
 def predict():
