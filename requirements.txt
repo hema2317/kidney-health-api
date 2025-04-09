@@ -1,6 +1,4 @@
 flask
-flask-cors
-scikit-learn
-gunicorn
-requests
-pandas
+joblib
+numpy
+scikit-learn==1.1.3
