@@ -1,3 +1,7 @@
+import os
+if not os.path.exists("kidney_model.pkl"):
+    import train_model
+
 from flask import Flask, request, jsonify
 import joblib
 import numpy as np
