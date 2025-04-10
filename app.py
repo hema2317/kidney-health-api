@@ -1,18 +1,19 @@
 import sys
 import os
-sys.stdout = sys.stderr  # Ensures logs are captured
-os.environ["PYTHONUNBUFFERED"] = "1"
-
+import numpy as np
+import pandas as pd  # ✅ FIXED: Proper import at the top
+import xgboost as xgb
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import xgboost as xgb
-import numpy as np
-import sys
 import logging
+
+# Logging & flush setup
+sys.stdout = sys.stderr
+os.environ["PYTHONUNBUFFERED"] = "1"
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
 app = Flask(__name__)
-CORS(app, origins=["https://kidney-health-ui.onrender.com"])  # <-- Add this line
+CORS(app, origins=["https://kidney-health-ui.onrender.com"])
 
 # Load model
 model = xgb.Booster()
@@ -32,12 +33,10 @@ def predict():
 
         print("Parsed inputs:", age, hba1c, albumin, scr, egfr, flush=True)
 
-   import pandas as pd  # Make sure it's imported at the top
-
-features = pd.DataFrame([[age, hba1c, albumin, scr, egfr]],
-                        columns=["age", "hba1c", "albumin", "scr", "egfr"])
-dmatrix = xgb.DMatrix(features)
-
+        # ✅ Match model training column names
+        features = pd.DataFrame([[age, hba1c, albumin, scr, egfr]],
+                                columns=["age", "hba1c", "albumin", "scr", "egfr"])
+        dmatrix = xgb.DMatrix(features)
 
         preds = model.predict(dmatrix)
         print("Raw prediction:", preds, flush=True)
@@ -48,12 +47,11 @@ dmatrix = xgb.DMatrix(features)
 
         print("Final risk:", risk, flush=True)
         return jsonify({'risk': risk})
-    
+
     except Exception as e:
         print("Prediction error:", str(e), flush=True)
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    import os
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
