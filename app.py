@@ -1,22 +1,29 @@
+import pickle
+import numpy as np
 from flask import Flask, request, jsonify
-from flask_cors import CORS
-import joblib
 
 app = Flask(__name__)
-CORS(app)  # Allow frontend access
 
-model = joblib.load("kidney_model.pkl")
+# Load XGBoost model
+with open('kidney_model_xgb.pkl', 'rb') as file:
+    model = pickle.load(file)
 
-@app.route("/predict", methods=["POST"])
+@app.route('/predict', methods=['POST'])
 def predict():
     data = request.get_json()
-    input_features = [[
-        data["age"], data["hba1c"], data["albumin"],
-        data["scr"], data["egfr"]
-    ]]
-    prediction = model.predict(input_features)[0]
-    categories = ["High", "Moderate", "Low"]
-    return jsonify({"risk": categories[prediction]})
 
-if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=10000)
+    # Get all 5 features from request
+    age = float(data['age'])
+    hba1c = float(data['hba1c'])
+    albumin = float(data['albumin'])
+    creatinine = float(data['creatinine'])
+    egfr = float(data['egfr'])
+
+    # Prepare for model
+    features = np.array([[age, hba1c, albumin, creatinine, egfr]])
+    
+    prediction = model.predict(features)[0]
+    return jsonify({'risk': prediction})
+
+if __name__ == '__main__':
+    app.run(debug=True)
