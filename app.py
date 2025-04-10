@@ -32,8 +32,12 @@ def predict():
 
         print("Parsed inputs:", age, hba1c, albumin, scr, egfr, flush=True)
 
-        features = np.array([[age, hba1c, albumin, scr, egfr]])
-        dmatrix = xgb.DMatrix(features)
+   import pandas as pd  # Make sure it's imported at the top
+
+features = pd.DataFrame([[age, hba1c, albumin, scr, egfr]],
+                        columns=["age", "hba1c", "albumin", "scr", "egfr"])
+dmatrix = xgb.DMatrix(features)
+
 
         preds = model.predict(dmatrix)
         print("Raw prediction:", preds, flush=True)
