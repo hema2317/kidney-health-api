@@ -6,3 +6,4 @@ pandas==1.5.3
 flask-cors==3.0.10
 gunicorn==21.2.0
 xgboost
+requests==2.31.0
