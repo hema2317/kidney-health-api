@@ -4,31 +4,39 @@ import xgboost as xgb
 import numpy as np
 
 app = Flask(__name__)
-CORS(app)  # 👈 Enables CORS for all domains
+CORS(app)
 
-# Load the XGBoost model from JSON
+# Load the model from the JSON file (XGBoost native format)
 model = xgb.Booster()
 model.load_model("kidney_model_xgb.json")
 
+# Prediction route
 @app.route('/predict', methods=['POST'])
 def predict():
-    data = request.get_json()
-
     try:
+        data = request.get_json()
         age = float(data['age'])
         hba1c = float(data['hba1c'])
         albumin = float(data['albumin'])
         scr = float(data['scr'])
         egfr = float(data['egfr'])
-    except (KeyError, ValueError) as e:
-        return jsonify({'error': f'Invalid input: {e}'}), 400
 
-    features = np.array([[age, hba1c, albumin, scr, egfr]])
-    dmatrix = xgb.DMatrix(features)
-    preds = model.predict(dmatrix)
-    predicted_class = int(np.argmax(preds))
+        # Prepare input for prediction
+        features = np.array([[age, hba1c, albumin, scr, egfr]])
+        dmatrix = xgb.DMatrix(features)
+        preds = model.predict(dmatrix)
+        predicted_class = int(np.argmax(preds))
 
-    label_map = {0: "Low", 1: "Moderate", 2: "High"}
-    risk = label_map.get(predicted_class, "Unknown")
+        # Risk label mapping
+        label_map = {0: "Low", 1: "Moderate", 2: "High"}
+        risk = label_map.get(predicted_class, "Unknown")
 
-    return jsonify({'risk': risk})
+        return jsonify({'risk': risk})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Required for Render deployment
+if __name__ == '__main__':
+    import os
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
