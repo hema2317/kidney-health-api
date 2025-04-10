@@ -4,13 +4,15 @@ import xgboost as xgb
 import numpy as np
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
 
-# Load the XGBoost model from JSON
+# Allow CORS for all origins (or restrict it to your frontend domain)
+CORS(app, origins=["https://kidney-health-ui.onrender.com"])
+
+# Load the XGBoost model
 model = xgb.Booster()
 model.load_model("kidney_model_xgb.json")
 
-# Input features: age, hba1c, albumin, scr, egfr
+# Predict route
 @app.route('/predict', methods=['POST'])
 def predict():
     data = request.get_json()
@@ -24,11 +26,11 @@ def predict():
     except (KeyError, ValueError) as e:
         return jsonify({'error': f'Invalid input: {e}'}), 400
 
-    # Prepare the input as a DMatrix
+    # Prepare the input features for prediction
     features = np.array([[age, hba1c, albumin, scr, egfr]])
     dmatrix = xgb.DMatrix(features)
 
-    # Get prediction
+    # Predict
     preds = model.predict(dmatrix)
     predicted_class = int(np.argmax(preds))
 
