@@ -1,3 +1,8 @@
+import sys
+import os
+sys.stdout = sys.stderr  # Ensures logs are captured
+os.environ["PYTHONUNBUFFERED"] = "1"
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import xgboost as xgb
