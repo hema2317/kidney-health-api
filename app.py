@@ -4,9 +4,9 @@ import xgboost as xgb
 import numpy as np
 
 app = Flask(__name__)
-CORS(app)  # This enables CORS for all domains and routes
+CORS(app, origins=["https://kidney-health-ui.onrender.com"])  # <-- Add this line
 
-# Load the model
+# Load model
 model = xgb.Booster()
 model.load_model("kidney_model_xgb.json")
 
@@ -20,12 +20,10 @@ def predict():
         scr = float(data['scr'])
         egfr = float(data['egfr'])
 
-        # Prepare input
         features = np.array([[age, hba1c, albumin, scr, egfr]])
         dmatrix = xgb.DMatrix(features)
         preds = model.predict(dmatrix)
 
-        # Check if prediction is valid
         if len(preds.shape) == 1:
             predicted_class = int(np.round(preds[0]))
         else:
@@ -38,7 +36,6 @@ def predict():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# For Render
 if __name__ == '__main__':
     import os
     port = int(os.environ.get("PORT", 10000))
