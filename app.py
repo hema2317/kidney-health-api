@@ -5,15 +5,12 @@ import numpy as np
 import os
 
 app = Flask(__name__)
+CORS(app)  # This enables CORS for all domains and routes
 
-# ✅ Allow only your frontend domain (very important)
-CORS(app, resources={r"/predict": {"origins": "https://kidney-health-ui.onrender.com"}})
-
-# Load the XGBoost model from JSON
+# Load the model
 model = xgb.Booster()
 model.load_model("kidney_model_xgb.json")
 
-# Prediction route
 @app.route('/predict', methods=['POST'])
 def predict():
     try:
@@ -24,13 +21,11 @@ def predict():
         scr = float(data['scr'])
         egfr = float(data['egfr'])
 
-        # Prepare input
         features = np.array([[age, hba1c, albumin, scr, egfr]])
         dmatrix = xgb.DMatrix(features)
         preds = model.predict(dmatrix)
         predicted_class = int(np.argmax(preds))
 
-        # Risk label mapping
         label_map = {0: "Low", 1: "Moderate", 2: "High"}
         risk = label_map.get(predicted_class, "Unknown")
 
@@ -38,7 +33,7 @@ def predict():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Render deployment
+# For Render deployment
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
