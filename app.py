@@ -52,6 +52,13 @@ def predict():
 def connect_cgm():
     dexcom_client_id = os.getenv("DEXCOM_CLIENT_ID")
     dexcom_redirect_uri = os.getenv("DEXCOM_REDIRECT_URI")
+
+    # 🔍 Add these lines for debugging
+    print("=== Dexcom Debug ===")
+    print("Client ID:", dexcom_client_id)
+    print("Redirect URI:", dexcom_redirect_uri)
+    print("====================")
+
     dexcom_auth_url = "https://sandbox-api.dexcom.com/v2/oauth2/login"
 
     params = {
