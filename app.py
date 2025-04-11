@@ -10,32 +10,13 @@ import xgboost as xgb
 from flask_cors import CORS
 from datetime import datetime, timedelta
 
+# Constants
 NIGHTSCOUT_URL = os.getenv("NIGHTSCOUT_URL", "https://kidney-cgm-demo-32a6e80f3c55.herokuapp.com")
-NIGHTSCOUT_SECRET = os.getenv("NIGHTSCOUT_SECRET", "nightscout123")  # Set this in Heroku
+NIGHTSCOUT_SECRET = os.getenv("NIGHTSCOUT_SECRET", "nightscout123")  # For future use if re-enabled
 
+# ✅ Simulated glucose values for testing (replaces Nightscout API call)
 def fetch_glucose_data_from_nightscout():
-    try:
-        end_time = datetime.utcnow()
-        start_time = end_time - timedelta(days=7)
-
-        params = {
-            "find[dateString][$gte]": start_time.isoformat(),
-            "find[dateString][$lte]": end_time.isoformat()
-        }
-
-        headers = {
-            "api-secret": NIGHTSCOUT_SECRET
-        }
-
-        url = f"{NIGHTSCOUT_URL}/api/v1/entries.json"
-        response = requests.get(url, headers=headers, params=params)
-        response.raise_for_status()
-        data = response.json()
-        glucose_vals = [entry["sgv"] for entry in data if "sgv" in entry]
-        return glucose_vals
-    except Exception as e:
-        print("Error fetching Nightscout data:", str(e))
-        return []
+    return [160, 145, 170, 155, 165]  # Simulated CGM values
 
 def estimate_hba1c_from_glucose(glucose_vals):
     if not glucose_vals:
@@ -43,19 +24,20 @@ def estimate_hba1c_from_glucose(glucose_vals):
     avg_glucose = sum(glucose_vals) / len(glucose_vals)
     return round((avg_glucose + 46.7) / 28.7, 2)
 
-# Setup logging
+# Logging setup
 sys.stdout = sys.stderr
 os.environ["PYTHONUNBUFFERED"] = "1"
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
-# Flask app setup
+# Flask setup
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "https://kidney-health-ui.onrender.com"}}, supports_credentials=True)
+
 @app.route('/')
 def home():
     return "Hello from Kidney Health API!"
 
-# Load the XGBoost model
+# Load XGBoost model
 model = xgb.Booster()
 model.load_model("kidney_model_xgb.json")
 
@@ -78,12 +60,12 @@ def predict():
         preds = model.predict(dmatrix)
         predicted_class = int(np.rint(preds[0]))
 
-        # Override logic if HbA1c is dangerously high (>=9.0)
+        # Adjust risk if HbA1c is very high
         if hba1c >= 9.0:
             if predicted_class == 0:
-                predicted_class = 1  # elevate from Low to Moderate
+                predicted_class = 1
             elif predicted_class == 1 and egfr < 60:
-                predicted_class = 2  # elevate to High if egfr also low
+                predicted_class = 2
 
         label_map = {0: "Low", 1: "Moderate", 2: "High"}
         risk = label_map.get(predicted_class, "Unknown")
