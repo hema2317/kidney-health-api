@@ -28,20 +28,19 @@ def predict():
         scr = float(data.get("scr", 0))
         egfr = float(data.get("egfr", 0))
 
-        # Prepare input
-        features = pd.DataFrame([[age, hba1c, albumin, scr, egfr]], 
-            columns=["age", "hba1c", "albumin", "scr", "egfr"])
-        dmatrix = xgb.DMatrix(features)
+        # Minimize DataFrame creation overhead
+        feature_array = np.array([[age, hba1c, albumin, scr, egfr]])
+        dmatrix = xgb.DMatrix(feature_array, feature_names=["age", "hba1c", "albumin", "scr", "egfr"])
 
         # Predict
         prediction = model.predict(dmatrix)
         predicted_class = int(np.rint(prediction[0]))
 
-        # Override risk based on key medical logic
+        # Rule-based override for accuracy
         if hba1c >= 9 and egfr < 60:
-            predicted_class = 2  # High risk
+            predicted_class = 2
         elif hba1c >= 8:
-            predicted_class = max(predicted_class, 1)  # At least moderate
+            predicted_class = max(predicted_class, 1)
 
         label_map = {0: "Low", 1: "Moderate", 2: "High"}
         risk = label_map.get(predicted_class, "Unknown")
@@ -54,7 +53,7 @@ def predict():
             patient_plan = "Maintain a balanced diet, stay hydrated, and monitor blood sugar regularly."
             doctor_plan = "Continue routine checks annually. Reinforce preventive care."
         elif risk == "Moderate":
-            patient_plan = "Watch your sugar intake and consult a nutritionist if needed. Monitor kidney labs every 3–6 months."
+            patient_plan = "Watch your sugar intake and consult a nutritionist. Monitor kidney labs every 3–6 months."
             doctor_plan = "Repeat eGFR and HbA1c in 3 months. Consider early nephrology input."
         elif risk == "High":
             patient_plan = "Strict sugar control and renal-friendly diet required. Avoid alcohol and NSAIDs."
@@ -70,6 +69,7 @@ def predict():
     except Exception as e:
         print("Prediction error:", str(e), flush=True)
         return jsonify({"error": str(e)}), 500
+
 
 if __name__ == "__main__":
     import os
