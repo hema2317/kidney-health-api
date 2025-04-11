@@ -1,103 +1,77 @@
-from flask import Flask, request, jsonify, redirect, make_response
-import urllib.parse
-import os
-import sys
-import logging
-import requests
-import numpy as np
-import pandas as pd
-import xgboost as xgb
+from flask import Flask, request, jsonify
 from flask_cors import CORS
-from datetime import datetime
+import xgboost as xgb
+import pandas as pd
+import numpy as np
 
-# Constants
-NIGHTSCOUT_URL = os.getenv("NIGHTSCOUT_URL", "https://kidney-cgm-demo-32a6e80f3c55.herokuapp.com")
-
-# Simulated CGM data for testing
-def fetch_glucose_data_from_nightscout():
-    return [160, 145, 170, 155, 165]
-
-def estimate_hba1c_from_glucose(glucose_vals):
-    if not glucose_vals:
-        return None
-    avg_glucose = sum(glucose_vals) / len(glucose_vals)
-    return round((avg_glucose + 46.7) / 28.7, 2)
-
-# Logging setup
-sys.stdout = sys.stderr
-os.environ["PYTHONUNBUFFERED"] = "1"
-logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
-
+# Initialize Flask app
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}})
 
-@app.after_request
-def add_cors_headers(response):
-    response.headers.add("Access-Control-Allow-Origin", "https://kidney-health-ui.onrender.com")
-    response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
-    response.headers.add("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-    return response
-
-@app.route('/')
-def home():
-    return "Hello from Kidney Health API!"
-
-# Load XGBoost model
+# Load trained XGBoost model
 model = xgb.Booster()
 model.load_model("kidney_model_xgb.json")
 
-@app.route('/predict', methods=['POST'])
+@app.route("/")
+def home():
+    return "Hello from Kidney Health Predictor!"
+
+@app.route("/predict", methods=["POST"])
 def predict():
     try:
         data = request.get_json()
         print("Incoming data:", data, flush=True)
 
-        age = float(data.get('age', 0))
-        hba1c = float(data.get('hba1c', 0))
-        albumin = float(data.get('albumin', 0))
-        scr = float(data.get('scr', 0))
-        egfr = float(data.get('egfr', 0))
+        age = float(data.get("age", 0))
+        hba1c = float(data.get("hba1c", 0))
+        albumin = float(data.get("albumin", 0))
+        scr = float(data.get("scr", 0))
+        egfr = float(data.get("egfr", 0))
 
+        # Prepare input
         features = pd.DataFrame([[age, hba1c, albumin, scr, egfr]], 
-                                columns=["age", "hba1c", "albumin", "scr", "egfr"])
+            columns=["age", "hba1c", "albumin", "scr", "egfr"])
         dmatrix = xgb.DMatrix(features)
 
-        preds = model.predict(dmatrix)
-        predicted_class = int(np.rint(preds[0]))
+        # Predict
+        prediction = model.predict(dmatrix)
+        predicted_class = int(np.rint(prediction[0]))
 
-        # Adjust risk if HbA1c is very high
-        if hba1c >= 9.0:
-            if predicted_class == 0:
-                predicted_class = 1
-            elif predicted_class == 1 and egfr < 60:
-                predicted_class = 2
+        # Override risk based on key medical logic
+        if hba1c >= 9 and egfr < 60:
+            predicted_class = 2  # High risk
+        elif hba1c >= 8:
+            predicted_class = max(predicted_class, 1)  # At least moderate
 
         label_map = {0: "Low", 1: "Moderate", 2: "High"}
         risk = label_map.get(predicted_class, "Unknown")
 
+        # Suggestions
+        patient_plan = ""
+        doctor_plan = ""
+
+        if risk == "Low":
+            patient_plan = "Maintain a balanced diet, stay hydrated, and monitor blood sugar regularly."
+            doctor_plan = "Continue routine checks annually. Reinforce preventive care."
+        elif risk == "Moderate":
+            patient_plan = "Watch your sugar intake and consult a nutritionist if needed. Monitor kidney labs every 3–6 months."
+            doctor_plan = "Repeat eGFR and HbA1c in 3 months. Consider early nephrology input."
+        elif risk == "High":
+            patient_plan = "Strict sugar control and renal-friendly diet required. Avoid alcohol and NSAIDs."
+            doctor_plan = "Urgent nephrology referral. Evaluate for diabetic nephropathy or rapid decline."
+
         return jsonify({
-            'risk': risk,
-            'explanation': f"Your prediction is based on: eGFR ({egfr}), HbA1c ({hba1c}%), Creatinine ({scr} mg/dL), and Albumin ({albumin} g/dL).",
-            'adjusted': hba1c >= 9.0
+            "risk": risk,
+            "explanation": f"Your risk is based on eGFR ({egfr}) and HbA1c ({hba1c}%) along with Albumin ({albumin}) and Creatinine ({scr}).",
+            "patient_plan": patient_plan,
+            "doctor_plan": doctor_plan
         })
 
     except Exception as e:
         print("Prediction error:", str(e), flush=True)
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
-@app.route('/get-hba1c', methods=['GET'])
-def get_hba1c():
-    glucose_vals = fetch_glucose_data_from_nightscout()
-    if not glucose_vals:
-        return jsonify({"error": "No CGM glucose values found"}), 404
-
-    estimated_hba1c = estimate_hba1c_from_glucose(glucose_vals)
-    return jsonify({
-        "estimated_hba1c": estimated_hba1c,
-        "glucose_points_used": len(glucose_vals),
-        "average_glucose": round(sum(glucose_vals) / len(glucose_vals), 2)
-    })
-
-if __name__ == '__main__':
+if __name__ == "__main__":
+    import os
     port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host="0.0.0.0", port=port)
