@@ -51,6 +51,9 @@ logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 # Flask app setup
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "https://kidney-health-ui.onrender.com"}}, supports_credentials=True)
+@app.route('/')
+def home():
+    return "Hello from Kidney Health API!"
 
 # Load the XGBoost model
 model = xgb.Booster()
