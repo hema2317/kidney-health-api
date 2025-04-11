@@ -8,6 +8,40 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 from flask_cors import CORS
+from datetime import datetime, timedelta
+
+NIGHTSCOUT_URL = os.getenv("NIGHTSCOUT_URL", "https://kidney-cgm-demo-32a6e80f3c55.herokuapp.com")
+NIGHTSCOUT_SECRET = os.getenv("NIGHTSCOUT_SECRET", "nightscout123")  # Set this in Heroku
+
+def fetch_glucose_data_from_nightscout():
+    try:
+        end_time = datetime.utcnow()
+        start_time = end_time - timedelta(days=7)
+
+        params = {
+            "find[dateString][$gte]": start_time.isoformat(),
+            "find[dateString][$lte]": end_time.isoformat()
+        }
+
+        headers = {
+            "api-secret": NIGHTSCOUT_SECRET
+        }
+
+        url = f"{NIGHTSCOUT_URL}/api/v1/entries.json"
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        data = response.json()
+        glucose_vals = [entry["sgv"] for entry in data if "sgv" in entry]
+        return glucose_vals
+    except Exception as e:
+        print("Error fetching Nightscout data:", str(e))
+        return []
+
+def estimate_hba1c_from_glucose(glucose_vals):
+    if not glucose_vals:
+        return None
+    avg_glucose = sum(glucose_vals) / len(glucose_vals)
+    return round((avg_glucose + 46.7) / 28.7, 2)
 
 # Setup logging
 sys.stdout = sys.stderr
@@ -130,6 +164,19 @@ def cgm_callback():
     except Exception as e:
         print("CGM callback error:", str(e), flush=True)
         return jsonify({"error": str(e)}), 500
+
+@app.route('/get-hba1c', methods=['GET'])
+def get_hba1c():
+    glucose_vals = fetch_glucose_data_from_nightscout()
+    if not glucose_vals:
+        return jsonify({"error": "No CGM glucose values found"}), 404
+
+    estimated_hba1c = estimate_hba1c_from_glucose(glucose_vals)
+    return jsonify({
+        "estimated_hba1c": estimated_hba1c,
+        "glucose_points_used": len(glucose_vals),
+        "average_glucose": round(sum(glucose_vals) / len(glucose_vals), 2)
+    })
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
