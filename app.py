@@ -1,16 +1,10 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import xgboost as xgb
-import pandas as pd
 import numpy as np
 
-# Initialize Flask app
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
-
-# Load trained XGBoost model
-model = xgb.Booster()
-model.load_model("kidney_model_xgb.json")
 
 @app.route("/")
 def home():
@@ -28,15 +22,16 @@ def predict():
         scr = float(data.get("scr", 0))
         egfr = float(data.get("egfr", 0))
 
-        # Minimize DataFrame creation overhead
-        feature_array = np.array([[age, hba1c, albumin, scr, egfr]])
-        dmatrix = xgb.DMatrix(feature_array, feature_names=["age", "hba1c", "albumin", "scr", "egfr"])
+        # ✅ Load model only when prediction is needed to save memory
+        model = xgb.Booster()
+        model.load_model("kidney_model_xgb.json")
 
-        # Predict
+        features = np.array([[age, hba1c, albumin, scr, egfr]])
+        dmatrix = xgb.DMatrix(features, feature_names=["age", "hba1c", "albumin", "scr", "egfr"])
+
         prediction = model.predict(dmatrix)
         predicted_class = int(np.rint(prediction[0]))
 
-        # Rule-based override for accuracy
         if hba1c >= 9 and egfr < 60:
             predicted_class = 2
         elif hba1c >= 8:
@@ -45,7 +40,6 @@ def predict():
         label_map = {0: "Low", 1: "Moderate", 2: "High"}
         risk = label_map.get(predicted_class, "Unknown")
 
-        # Suggestions
         patient_plan = ""
         doctor_plan = ""
 
@@ -53,7 +47,7 @@ def predict():
             patient_plan = "Maintain a balanced diet, stay hydrated, and monitor blood sugar regularly."
             doctor_plan = "Continue routine checks annually. Reinforce preventive care."
         elif risk == "Moderate":
-            patient_plan = "Watch your sugar intake and consult a nutritionist. Monitor kidney labs every 3–6 months."
+            patient_plan = "Watch sugar intake and consult a nutritionist. Monitor kidney labs every 3–6 months."
             doctor_plan = "Repeat eGFR and HbA1c in 3 months. Consider early nephrology input."
         elif risk == "High":
             patient_plan = "Strict sugar control and renal-friendly diet required. Avoid alcohol and NSAIDs."
@@ -69,7 +63,6 @@ def predict():
     except Exception as e:
         print("Prediction error:", str(e), flush=True)
         return jsonify({"error": str(e)}), 500
-
 
 if __name__ == "__main__":
     import os
