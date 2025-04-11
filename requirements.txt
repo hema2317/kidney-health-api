@@ -7,4 +7,4 @@ flask-cors==3.0.10
 gunicorn==21.2.0
 xgboost==1.7.6
 requests==2.31.0
-pymongo[srv]
+
