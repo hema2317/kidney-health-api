@@ -40,10 +40,22 @@ def predict():
 
         preds = model.predict(dmatrix)
         predicted_class = int(np.rint(preds[0]))
+
+        # Override logic if HbA1c is dangerously high (>=9.0)
+        if hba1c >= 9.0:
+            if predicted_class == 0:
+                predicted_class = 1  # elevate from Low to Moderate
+            elif predicted_class == 1 and egfr < 60:
+                predicted_class = 2  # elevate to High if egfr also low
+
         label_map = {0: "Low", 1: "Moderate", 2: "High"}
         risk = label_map.get(predicted_class, "Unknown")
 
-        return jsonify({'risk': risk})
+        return jsonify({
+            'risk': risk,
+            'explanation': f"Your prediction is based on: eGFR ({egfr}), HbA1c ({hba1c}%), Creatinine ({scr} mg/dL), and Albumin ({albumin} g/dL).",
+            'adjusted': hba1c >= 9.0
+        })
     except Exception as e:
         print("Prediction error:", str(e), flush=True)
         return jsonify({'error': str(e)}), 500
@@ -53,7 +65,6 @@ def connect_cgm():
     dexcom_client_id = os.getenv("DEXCOM_CLIENT_ID")
     dexcom_redirect_uri = os.getenv("DEXCOM_REDIRECT_URI")
 
-    # 🔍 Add these lines for debugging
     print("=== Dexcom Debug ===")
     print("Client ID:", dexcom_client_id)
     print("Redirect URI:", dexcom_redirect_uri)
@@ -78,7 +89,6 @@ def cgm_callback():
         return jsonify({"error": "Authorization code not found"}), 400
 
     try:
-        # Token exchange
         token_url = "https://sandbox-api.dexcom.com/v2/oauth2/token"
         payload = {
             "client_id": os.getenv("DEXCOM_CLIENT_ID"),
@@ -94,7 +104,6 @@ def cgm_callback():
         if not access_token:
             return jsonify({"error": "Access token fetch failed", "details": token_data}), 500
 
-        # Glucose fetch
         glucose_url = "https://sandbox-api.dexcom.com/v2/users/self/egvs"
         params = {
             "startDate": "2024-04-01T00:00:00",
