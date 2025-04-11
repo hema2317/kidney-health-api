@@ -15,7 +15,7 @@ os.environ["PYTHONUNBUFFERED"] = "1"
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "https://kidney-health-ui.onrender.com"}}, supports_credentials=True)
+CORS(app, origins=["https://kidney-health-ui.onrender.com"])
 
 # Load model once at startup
 model = xgb.Booster()
