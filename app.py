@@ -1,18 +1,46 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, redirect
 from flask_cors import CORS
 import xgboost as xgb
 import numpy as np
+import os
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
-# Load XGBoost model
+# Load the model
 model = xgb.Booster()
 model.load_model("kidney_model_xgb.json")
+
+# Simulated glucose values
+def fetch_simulated_glucose():
+    return [160, 145, 170, 155, 165]
+
+def estimate_hba1c(glucose_values):
+    if not glucose_values:
+        return None
+    avg_glucose = sum(glucose_values) / len(glucose_values)
+    return round((avg_glucose + 46.7) / 28.7, 2)
 
 @app.route("/")
 def home():
     return "Hello from Kidney Health Predictor!"
+
+@app.route("/connect-cgm")
+def connect_cgm():
+    # Simulate CGM by auto-redirecting to estimated HbA1c page
+    return redirect("/get-hba1c")
+
+@app.route("/get-hba1c")
+def get_hba1c():
+    glucose_vals = fetch_simulated_glucose()
+    if not glucose_vals:
+        return jsonify({"error": "No simulated CGM data found"}), 404
+    estimated = estimate_hba1c(glucose_vals)
+    return jsonify({
+        "estimated_hba1c": estimated,
+        "glucose_points_used": len(glucose_vals),
+        "average_glucose": round(sum(glucose_vals) / len(glucose_vals), 2)
+    })
 
 @app.route("/predict", methods=["POST"])
 def predict():
@@ -39,16 +67,18 @@ def predict():
         label_map = {0: "Low", 1: "Moderate", 2: "High"}
         risk = label_map.get(predicted_class, "Unknown")
 
-        patient_plan = doctor_plan = ""
+        patient_plan = ""
+        doctor_plan = ""
+
         if risk == "Low":
             patient_plan = "Maintain a balanced diet, stay hydrated, and monitor blood sugar regularly."
             doctor_plan = "Continue routine checks annually. Reinforce preventive care."
         elif risk == "Moderate":
-            patient_plan = "Watch your sugar intake and consult a nutritionist. Monitor kidney labs every 3–6 months."
-            doctor_plan = "Repeat eGFR and HbA1c in 3 months. Consider early nephrology input."
+            patient_plan = "Watch your sugar intake. Monitor kidney labs every 3–6 months."
+            doctor_plan = "Repeat eGFR and HbA1c in 3 months. Consider nephrology input."
         elif risk == "High":
             patient_plan = "Strict sugar control and renal-friendly diet required. Avoid alcohol and NSAIDs."
-            doctor_plan = "Urgent nephrology referral. Evaluate for diabetic nephropathy or rapid decline."
+            doctor_plan = "Urgent nephrology referral. Evaluate for diabetic nephropathy."
 
         return jsonify({
             "risk": risk,
@@ -61,23 +91,6 @@ def predict():
         print("Prediction error:", str(e), flush=True)
         return jsonify({"error": str(e)}), 500
 
-# ✅ Simulated CGM route
-@app.route("/get-hba1c", methods=["GET"])
-def get_hba1c():
-    glucose_values = [120, 140, 160, 150, 135, 155, 145]  # Simulated readings
-    if not glucose_values:
-        return jsonify({"error": "No glucose data available"}), 404
-
-    avg_glucose = sum(glucose_values) / len(glucose_values)
-    estimated_hba1c = round((avg_glucose + 46.7) / 28.7, 2)
-
-    return jsonify({
-        "estimated_hba1c": estimated_hba1c,
-        "glucose_points_used": len(glucose_values),
-        "average_glucose": round(avg_glucose, 2)
-    })
-
 if __name__ == "__main__":
-    import os
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
